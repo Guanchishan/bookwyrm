@@ -1,0 +1,13 @@
+version: 2
+updates:
+  # 对 npm 包管理工具进行版本更新
+  - package-ecosystem: "npm"
+    directory: "/" # 指定 package.json 文件的位置
+    schedule:
+      interval: "weekly" # 每周检查一次更新
+
+  # 对 Docker 镜像进行版本更新
+  - package-ecosystem: "docker"
+    directory: "/" # 指定 Dockerfile 文件的位置
+    schedule:
+      interval: "monthly" # 每月检查一次更新
