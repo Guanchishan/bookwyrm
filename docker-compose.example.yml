@@ -1,16 +1,6 @@
-version: '3'
-
-x-logging:
-  &default-logging
-  driver: "json-file"
-  options:
-    max-size: "150m"
-    max-file: "2"
-
 services:
   nginx:
     image: nginx:1.25.2
-    logging: *default-logging
     restart: unless-stopped
     ports:
       - "${PORT:-80}:80"
@@ -21,10 +11,11 @@ services:
       - main
     environment:
       - DOMAIN=${DOMAIN}
+      - MAX_UPLOAD_MiB=${DATA_UPLOAD_MAX_MEMORY_MiB:-100}
     volumes:
       - ./nginx/${NGINX_SETUP:-https}.conf:/etc/nginx/templates/default.conf.template
+      - ./nginx/server_config:/etc/nginx/templates/server_config.template
       - ./nginx/locations:/etc/nginx/conf.d/locations
-      - ./nginx/server_config:/etc/nginx/conf.d/server_config
       - ./nginx/server_name:/etc/nginx/conf.d/server_name
       - ./nginx/99-autoreload.sh:/docker-entrypoint.d/99-autoreload.sh
       - ./certbot/conf:/etc/nginx/ssl
@@ -34,8 +25,6 @@ services:
   certbot:
     image: certbot/certbot:latest
     entrypoint: /bin/sh -c "trap exit TERM; while [ "$NGINX_SETUP" = "https" ];do certbot renew --webroot --webroot-path=/var/www/certbot; sleep 1d & wait $${!}; done"
-    environment:
-      - USE_HTTPS=${USE_HTTPS}
     depends_on:
       - nginx
     volumes:
@@ -43,7 +32,7 @@ services:
       - ./certbot/logs:/var/log/letsencrypt
       - ./certbot/data:/var/www/certbot
   db:
-    build: postgres-docker
+    image: postgres:17
     env_file: .env
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
@@ -53,7 +42,6 @@ services:
       timeout: 10s
     volumes:
       - pgdata:/var/lib/postgresql/data
-      - backups:/backups
     networks:
       - main
   web:
@@ -78,7 +66,6 @@ services:
   redis_activity:
     image: redis:7.2.1
     command: redis-server --requirepass ${REDIS_ACTIVITY_PASSWORD} --appendonly yes --port ${REDIS_ACTIVITY_PORT}
-    logging: *default-logging
     volumes:
       - ./redis.conf:/etc/redis/redis.conf
       - redis_activity_data:/data
@@ -89,7 +76,6 @@ services:
   redis_broker:
     image: redis:7.2.1
     command: redis-server --requirepass ${REDIS_BROKER_PASSWORD} --appendonly yes --port ${REDIS_BROKER_PORT}
-    logging: *default-logging
     volumes:
       - ./redis.conf:/etc/redis/redis.conf
       - redis_broker_data:/data
@@ -103,7 +89,6 @@ services:
     networks:
       - main
     command: celery -A celerywyrm worker -l info -Q high_priority,medium_priority,low_priority,streams,images,suggested_users,email,connectors,lists,inbox,imports,import_triggered,broadcast,misc
-    logging: *default-logging
     volumes:
       - .:/app
       - static_volume:/app/static
@@ -119,7 +104,6 @@ services:
     networks:
       - main
     command: celery -A celerywyrm beat -l INFO --scheduler django_celery_beat.schedulers:DatabaseScheduler
-    logging: *default-logging
     volumes:
       - .:/app
       - static_volume:/app/static
@@ -131,7 +115,6 @@ services:
   flower:
     build: .
     command: celery -A celerywyrm flower --basic_auth=${FLOWER_USER}:${FLOWER_PASSWORD} --url_prefix=flower
-    logging: *default-logging
     env_file: .env
     volumes:
       - .:/app
@@ -152,7 +135,6 @@ services:
       - tools
 volumes:
   pgdata:
-  backups:
   static_volume:
   media_volume:
   exports_volume:
