@@ -45,3 +45,4 @@ nginx/default.conf
 
 # Docker
 docker-compose.override.yml
+docker-compose.yml
